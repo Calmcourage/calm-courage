@@ -1,21 +1,22 @@
-# Calm Courage — Comprehensive Documentation - September 18th 2026
+# Calm Courage — Comprehensive Documentation - September 21st 2026
 
-**Date:** 18 Sep 2026  
+**Date:** 21 Sep 2026  
 **Prepared for:** Ashley / next developer  
-**Source of truth branch:** `duc`  
+**Source of truth branch:** `main`  
 **Repo:** https://github.com/ductranphan/calm-courage  
 
 ---
 
 ## 0. Critical first facts
 
-1. **Latest deployment-ready work is on GitHub branch `duc`**, not necessarily fully merged into `main`.
-2. Local working tree on `duc` should be kept **clean and up to date with `origin/duc`**.
+1. **Source of truth is GitHub `main`** (PR #13 merged `duc` → `main`). Keep local `main` clean and up to date with `origin/main`.
+2. Branch `duc` still exists for historical work; prefer **`main`** for new development unless the company says otherwise.
 3. **Firebase backend for project `calm-courage-co` is already deployed** (rules + Cloud Functions).
 4. **App Store / Google Play submission has not happened.**
-5. **Card art OOM risk is largely mitigated on `duc`** (photo SVGs → JPEG/PNG; assets ~262 MB → ~34 MB). Prefer physical devices / EAS preview for final QA; first Metro bundle after `--clear` can still be slow.
+5. **Card art OOM risk is still real on `main`.** Emotion Match + Scenario decks are large photo-in-SVG assets. Prefer physical devices / EAS preview for QA; Expo Go + low-RAM emulators can crash. Asset rasterization is **not** in the repo yet.
 6. **Never commit `.env`.** Keys live locally / in EAS secrets / a password manager only.
 7. **There is no shared “admin” login baked into the app.** Access = platform accounts (GitHub, Firebase, Expo) + a filled `.env` + signing up (or using) a parent email/password in the app. Confirm every invite **before** the previous developer leaves.
+8. **Expo/EAS is not linked yet** — no `extra.eas.projectId` in `app.json`. Local Expo Go does not require an Expo org; cloud builds do (`eas init`).
 
 ---
 
@@ -56,7 +57,7 @@ Template of required env **names** (values are secret): see `.env.example`.
 git clone https://github.com/ductranphan/calm-courage.git
 cd calm-courage
 git fetch origin
-git checkout duc
+git checkout main
 git pull
 npm install
 npm run functions:install
@@ -104,9 +105,9 @@ There is **no hardcoded staff password**. Use Firebase Auth email/password like 
 
 ### Soft-launch / QA subscription unlock
 
-- In **local `.env` only**, set `EXPO_PUBLIC_ENABLE_QA_PURCHASE=true`, restart Metro (`npx expo start --clear`), then use the paywall Face ID sheet to call `activateSubscription`.
-- Leave the flag **unset/false** for any App Store / Play build (fake purchase UI is a policy violation).
-- `npm run eas:env:sync` **does not** push this flag; set it on EAS dashboard for internal profiles only if needed.
+- Flag `EXPO_PUBLIC_ENABLE_QA_PURCHASE` / `QA_PURCHASE_ENABLED` exists in `src/constants/featureFlags.ts`, but **`paywall.tsx` does not read it yet** — the Face ID simulation sheet is always available on `main`.
+- **Before any store build:** wire the paywall to that flag (show “coming soon” when false) or replace with real IAP. Fake purchase UI violates App Store 3.1.1 / Play payments policy.
+- Until gated: use the paywall Face ID sheet only on internal/QA devices to call `activateSubscription`.
 
 ### If login fails
 
@@ -210,12 +211,13 @@ Child dashboard (`child-dashboard.tsx`) documents V1 activities:
 7. **Real Apple/Google IAP** + receipt verification in Cloud Functions
 8. Set `ALLOW_UNVERIFIED_SUBSCRIPTION_GRANT=false` on Functions before public release
 9. Legal review of consent copy in `src/constants/consent.ts`
-10. Asset performance fix — **done on `duc`**: photo SVGs flattened to JPEG/PNG (~262 MB → ~34 MB); re-run `scripts/optimize-card-art.ps1` for new Figma card art
-11. Gate paywall Face ID simulation — **done on `duc`**: `paywall.tsx` reads `QA_PURCHASE_ENABLED`
+10. **Asset performance fix** — convert Emotion Match + Scenario photo-SVGs to optimized JPEG/PNG (and stop importing multi-MB SVGs as React components). Still outstanding on `main`.
+11. **Gate paywall Face ID simulation** — `QA_PURCHASE_ENABLED` exists; wire `paywall.tsx` to it (or ship real IAP) before store builds.
+12. Store icon / Android `adaptiveIcon` + mic/photo/camera permission strings in `app.json` (still using `logo.png`; no adaptive icon / usage strings on `main`).
 
-Done on frontend (`duc`, 16 Sep 2026): store icon + Android adaptive icon on `#F1F3F5` (matches splash; no in-app palette change), mic/photo permission strings, paywall QA gate, forgot-password ActionCodeSettings, user-facing env hints removed, card/illustration assets rasterized without redesign.
+Done on backend (merged to `main`, 16 Sep 2026): EAS build profiles use `environment` (development/preview/production), `npm run eas:env:sync` pushes `EXPO_PUBLIC_*` into those environments, Firebase client config fails fast if vars are missing, Cloud Functions validate/sanitize entitlement input and document turning off unverified grants, `firestore.indexes.json` is wired into deploy, and `functions/.env.example` documents Functions env vars.
 
-Done on backend (16 Sep 2026): EAS build profiles use `environment` (development/preview/production), `npm run eas:env:sync` pushes `EXPO_PUBLIC_*` into those environments, Firebase client config fails fast if vars are missing, Cloud Functions validate/sanitize entitlement input and document turning off unverified grants, `firestore.indexes.json` is wired into deploy, and `functions/.env.example` documents Functions env vars.
+Also on `main`: password-reset **ActionCodeSettings** helper in `src/services/auth.ts` (confirm Firebase Auth authorized domains in console).
 
 ### Soft-launch / internal testing can proceed earlier with
 
@@ -231,12 +233,13 @@ Done on backend (16 Sep 2026): EAS build profiles use `environment` (development
 
 | Task | Why |
 |------|-----|
+| Convert Emotion Match + Scenario SVGs to optimized JPEG/PNG | Giant SVGs cause Expo Go / emulator OOM and huge bundles |
+| Wire `paywall.tsx` to `QA_PURCHASE_ENABLED` (or replace with real IAP) | Prevents fake purchase UI in store builds |
 | Replace paywall Face ID simulation with StoreKit / Play Billing | Required for real money + App Review |
 | Implement receipt verification in `functions/index.js` (TODO already marked) | Stop unverified entitlement grants |
 | Run `eas init` to create `extra.eas.projectId` | Builds and Expo push tokens both need it |
-| Confirm password-reset ActionCodeSettings + authorized domains in Firebase Auth | Client now sends ActionCodeSettings; confirm Firebase console domains |
-| Commission a purpose-drawn square app icon | Current icon is wordmark on `#F1F3F5` — valid for stores; designer mark optional |
-| Merge `duc` → `main` via PR when company is ready | Keep default branch current |
+| Confirm password-reset authorized domains in Firebase Auth | Client sends ActionCodeSettings; console domains must match |
+| Add store icon + Android adaptiveIcon + mic/photo permission strings in `app.json` | Required for store builds / permission prompts |
 | Clean ESLint / React Compiler issues (pre-existing in several screens) | Quality; not currently blocking builds |
 
 ### Medium / later
@@ -256,14 +259,14 @@ Done on backend (16 Sep 2026): EAS build profiles use `environment` (development
 
 ### Known / expected issues
 
-1. **Expo Go / Android emulator crash or kick-back after bundle — largely resolved on `duc`**
-   - Cause was multi-MB SVG “images” imported as React components.
-   - Fixed by `scripts/optimize-card-art.ps1` (assets ~262 MB → ~34 MB).
-   - Re-run the script whenever new Figma card art is added.
+1. **Expo Go / Android emulator crash or kick-back after bundle**
+   - Cause: multi-MB SVG “images” imported as React components (Emotion Match + Scenario card decks).
+   - Mitigation started: lazy routes for those screens + lighter startup preload.
+   - Residual risk: still huge on first open of those games; emulator RAM limited. Rasterize assets before relying on Expo Go for final QA.
 
-2. **First Metro bundle after `--clear` is slow** (often 30–90s). Less severe after asset conversion.
+2. **First Metro bundle after `--clear` is very slow** (often 30–90s+). Normal for this asset-heavy repo.
 
-3. **Paywall “purchase” is QA-only and gated** — Face ID sheet only when `EXPO_PUBLIC_ENABLE_QA_PURCHASE=true`. Store builds show “coming soon”.
+3. **Paywall “purchase” is QA-only and not gated on `main`** — Face ID sheet simulates success and calls Cloud Function; `QA_PURCHASE_ENABLED` exists but paywall does not enforce it yet.
 
 4. **Subscription grants can be unverified** while `ALLOW_UNVERIFIED_SUBSCRIPTION_GRANT` ≠ `"false"`.
 
@@ -271,7 +274,7 @@ Done on backend (16 Sep 2026): EAS build profiles use `environment` (development
 
 6. **Web export** is not a primary target; native-only modules (e.g. pager-view) can fail on web.
 
-7. **Local `main` may be behind `origin/main`** on some machines; always pull remotes and use **`duc`** for this workstream.
+7. Keep **`main`** current with `git pull`; do not assume `duc` is ahead after PR #13.
 
 ### Smoke test checklist (must run on real build)
 
@@ -284,12 +287,10 @@ From `PRODUCTION.md` §6 (still unchecked):
 - Privacy Policy opens
 - Daily emotion → encouragement
 - Level 1 free; Level 2+ paywall
-- Paywall: “coming soon” unless `EXPO_PUBLIC_ENABLE_QA_PURCHASE=true`; with flag, Face ID sheet → Cloud Function trial
-- Scenario / Emotion Match / Roleplay card art renders after raster conversion
+- Paywall Face ID sheet → Cloud Function trial (until gated / real IAP ships)
 - Forgot password → deep link → reset
 - Contact Us creates `supportTickets`
 - Delete child / delete account cascade
-- App icon looks correct on home screen (iOS and Android)
 
 ### Suggested QA environments
 
@@ -378,7 +379,7 @@ Source for Firebase web config: **Firebase Console → Project settings → Your
 ```bash
 git clone https://github.com/ductranphan/calm-courage.git
 cd calm-courage
-git checkout duc
+git checkout main
 npm install
 npm run functions:install
 
@@ -469,7 +470,8 @@ npm run seed:emotion-prompts
 | Real IAP purchase flow | Not implemented (QA Face ID only) |
 | Social login | Hidden / not wired |
 | Remote push sending | Not implemented |
-| Asset optimization for card decks | **Done on `duc`** — re-run `scripts/optimize-card-art.ps1` for new art |
+| Asset optimization for card decks | **Outstanding** — Emotion Match + Scenario photo-SVGs still in repo |
+| Paywall QA gate (`QA_PURCHASE_ENABLED`) | Flag exists; **paywall not wired** |
 | Some challenge “complete” paths / polish | Called out in `PRODUCTION.md` as post soft-launch |
 
 ---
@@ -501,14 +503,14 @@ npm run seed:emotion-prompts
 
 ```text
 GitHub:  https://github.com/ductranphan/calm-courage
-Branch:  duc   ← use this for latest deployment work
+Branch:  main   ← use this for current work
 ```
 
 ### Branch notes
 
-- `main` exists and may differ; local `main` can be behind `origin/main`.
-- `Negin` branch also exists (other contributor work).
-- **Do not assume `main` has all COPPA/Firebase/EAS work until merged.** Prefer `duc`, then open PR → `main`.
+- **`main` is current** after PR #13 (merged handover + backend prep from `duc`).
+- `duc` and `Negin` branches still exist historically; do not assume they are ahead of `main`.
+- Prefer `main`, then open feature PRs → `main`.
 
 ### Clone quick start
 
@@ -516,7 +518,7 @@ Branch:  duc   ← use this for latest deployment work
 git clone https://github.com/ductranphan/calm-courage.git
 cd calm-courage
 git fetch origin
-git checkout duc
+git checkout main
 git pull
 npm install
 npm run functions:install
@@ -541,9 +543,8 @@ npx expo start --clear
 | `firebase.json` | Rules + functions deploy config |
 | `eas.json` | Build/submit profiles (wired to EAS environments) |
 | `scripts/sync-eas-env.mjs` | Pushes `EXPO_PUBLIC_*` from `.env` into EAS environments |
-| `scripts/optimize-card-art.ps1` | Re-rasterize new Figma card art if assets grow again |
 | `functions/index.js` | Entitlement Functions + soft-launch notes |
-| `src/constants/featureFlags.ts` | `QA_PURCHASE_ENABLED` — paywall Face ID only when true |
+| `src/constants/featureFlags.ts` | `QA_PURCHASE_ENABLED` — **exists; paywall must still read it** |
 
 ### Access confirmation (same list as §0A — verify Ashley can open each)
 
@@ -558,7 +559,7 @@ npx expo start --clear
 
 ### App login (same as §0B — no shared admin password)
 
-Parent signs up or signs in with email/password → verify email → Parent PIN → create child → parent/child switch. Level 1 free; Level 2+ paywall. QA unlock only with `EXPO_PUBLIC_ENABLE_QA_PURCHASE=true` locally.
+Parent signs up or signs in with email/password → verify email → Parent PIN → create child → parent/child switch. Level 1 free; Level 2+ paywall. Soft-launch Face ID unlock exists on paywall but is **not yet gated** by `EXPO_PUBLIC_ENABLE_QA_PURCHASE` on `main`.
 
 ### Do **not** hand over via chat/email in plain text if avoidable
 
@@ -587,25 +588,24 @@ Expo app (src/)
 2. **Parent access PIN is session memory only** — expected to re-prompt after kill/relaunch.
 3. **Active child is session memory only.**
 4. **Age gate adult clearance is local AsyncStorage**; under-13 years are not persisted.
-5. **Heavy art was the #1 performance risk**; raster conversion on `duc` largely fixed it. Re-run the optimize script for new Figma exports.
-6. **Soft-launch entitlements are intentionally loose** until IAP exists — don’t ship that to public production.
+5. **Heavy art is the #1 performance risk** on `main` (Emotion Match + Scenario SVGs). Fix assets before spending weeks on Expo Go emulator debugging.
+6. **Soft-launch entitlements are intentionally loose** until IAP exists — don’t ship that to public production; also gate the Face ID paywall before store builds.
 7. **Email-only auth for launch**; social buttons removed/hidden on purpose.
 8. **Consent version string** must be bumped when legal text changes (`CONSENT_VERSION`).
 
 ### Suggested first week for Ashley
 
 1. **Confirm every checkbox in §0A** (GitHub, Firebase, Expo, password-manager secrets) while the previous developer is still reachable.
-2. Clone `duc`, fill `.env` from the vault, run the app (§0A setup).
+2. Clone **`main`**, fill `.env` from the vault, run the app (§0A setup).
 3. Create a QA parent account via the app login path in §0B; record email/password/PIN in the vault.
-4. Walk `PRODUCTION.md` smoke tests against live `calm-courage-co` (physical device or EAS preview preferred).
+4. Walk `PRODUCTION.md` smoke tests against live `calm-courage-co` (physical device preferred; expect heavy-asset pain in Expo Go).
 5. Confirm Functions + rules still match repo (`firebase deploy` only if drift).
 6. Align with company on Privacy Policy URL + Apple/Google store account owners.
-7. Open PR `duc` → `main` once validated.
-8. Start StoreKit / Play Billing design with receipt verification in Functions.
+7. Prioritize: asset rasterization, paywall QA gate, `eas init`, then real IAP + receipt verification.
 
 ### One-sentence status for leadership
 
-> The Calm Courage V1 app and Firebase backend are largely built and live; card-art performance and paywall QA gating are done on `duc`; remaining work is company access/credentials, privacy URL, store accounts, real IAP, device QA, and merging/releasing via EAS — not rebuilding the product from scratch.
+> The Calm Courage V1 app and Firebase backend are largely built and live on `main`; remaining work is company access/credentials, privacy URL, store accounts, asset performance, paywall gating / real IAP, device QA, and EAS linking — not rebuilding the product from scratch.
 
 ---
 
