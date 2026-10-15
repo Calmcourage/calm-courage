@@ -5,7 +5,9 @@
  * Activities 2+ require an active parent subscription entitlement.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useRef, useState } from "react";
+import { useFocusEffect } from "expo-router";
+import { AppState } from "react-native";
 
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -38,8 +40,10 @@ export function usePremiumAccess() {
   const { user } = useAuth();
   const [hasPremium, setHasPremium] = useState(false);
   const [loading, setLoading] = useState(true);
+  const requestVersion = useRef(0);
 
   const refresh = useCallback(async () => {
+    const version = ++requestVersion.current;
     if (!user?.uid) {
       setHasPremium(false);
       setLoading(false);
@@ -51,21 +55,29 @@ export function usePremiumAccess() {
     try {
       const entitlement =
         await getSubscriptionEntitlement(user.uid);
+      if (version !== requestVersion.current) return;
       setHasPremium(entitlement.isActive);
     } catch (error) {
       console.warn(
         "Unable to load subscription entitlement:",
         error,
       );
-      setHasPremium(false);
+      if (version === requestVersion.current) setHasPremium(false);
     } finally {
-      setLoading(false);
+      if (version === requestVersion.current) setLoading(false);
     }
-  }, [user?.uid]);
+  }, [user]);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     void refresh();
-  }, [refresh]);
+    const listener = AppState.addEventListener("change", state => {
+      if (state === "active") void refresh();
+    });
+    return () => {
+      requestVersion.current++;
+      listener.remove();
+    };
+  }, [refresh]));
 
   return {
     hasPremium,

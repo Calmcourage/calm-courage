@@ -69,24 +69,15 @@ function parseDateValue(value: unknown): Date | null {
 
 function computeIsActive(
   plan: SubscriptionPlan,
-  trialEndsAt: Date | null,
   renewsAt: Date | null,
 ): boolean {
-  const now = Date.now();
-
-  if (plan === "monthly" || plan === "yearly") {
-    if (trialEndsAt && trialEndsAt.getTime() > now) {
-      return true;
-    }
-
-    if (renewsAt && renewsAt.getTime() > now) {
-      return true;
-    }
-
-    return !renewsAt || renewsAt.getTime() > now;
-  }
-
-  return false;
+  // The existing schema uses renewsAt as the entitlement expiry, including
+  // trials. A missing/expired value must not be bypassed by a trial date.
+  return (
+    (plan === "monthly" || plan === "yearly") &&
+    renewsAt !== null &&
+    renewsAt.getTime() > Date.now()
+  );
 }
 
 export async function getSubscriptionEntitlement(
@@ -122,7 +113,7 @@ export async function getSubscriptionEntitlement(
         : null,
     renewsAt,
     trialEndsAt,
-    isActive: computeIsActive(plan, trialEndsAt, renewsAt),
+    isActive: computeIsActive(plan, renewsAt),
   };
 }
 
