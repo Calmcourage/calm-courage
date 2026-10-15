@@ -25,6 +25,9 @@ import {
 } from "react-native";
 
 import { colors } from "@/constants/colors";
+import StorePaywall from "@/components/StorePaywall";
+import { storePurchasesAvailable } from "@/services/storePurchases";
+import { QA_PURCHASE_ENABLED } from "@/constants/featureFlags";
 import { useAuth } from "@/contexts/AuthContext";
 import { activateSubscription } from "@/services/subscription";
 import { x, y } from "@/utils/scaling";
@@ -235,6 +238,10 @@ function getFirstBillingDate(): string {
 }
 
 export default function PaywallScreen() {
+  return storePurchasesAvailable() ? <StorePaywall /> : <PreviewPaywallScreen />;
+}
+
+function PreviewPaywallScreen() {
   const { user } = useAuth();
 
   const [
@@ -257,11 +264,19 @@ export default function PaywallScreen() {
   );
 
   function handleStartTrial() {
+    if (!QA_PURCHASE_ENABLED) {
+      Alert.alert(
+        "Subscriptions coming soon",
+        "Subscriptions are not available yet. Please check back later.",
+      );
+      return;
+    }
+
     setPurchaseSheetVisible(true);
   }
 
   async function handlePaymentSuccess() {
-    if (!user?.uid || activating) {
+    if (!QA_PURCHASE_ENABLED || !user?.uid || activating) {
       return;
     }
 

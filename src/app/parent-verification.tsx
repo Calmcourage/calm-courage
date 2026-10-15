@@ -7,7 +7,7 @@
  * parents/{authenticatedUserUid}
  */
 
-import { router, type Href } from "expo-router";
+import { router, useLocalSearchParams, type Href } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -43,6 +43,7 @@ const numberRows = [
 ];
 
 export default function ParentVerificationScreen() {
+  const { returnTo } = useLocalSearchParams<{ returnTo?: string }>();
   const {
     user,
     loading: authLoading,
@@ -246,7 +247,7 @@ export default function ParentVerificationScreen() {
       }
 
       setDestinationAfterUnlock(
-        "/home",
+        returnTo === "/paywall" ? "/paywall" : "/home",
       );
 
       unlockParentAccess();

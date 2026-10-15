@@ -27,14 +27,15 @@ const repoRoot = path.join(
 const ALL_ENVIRONMENTS = ["development", "preview", "production"];
 
 /**
- * Bundle ids are declared per build profile in eas.json. The QA purchase flag
- * is deliberately excluded so a local QA value can never leak into a store
- * build; set it on the EAS dashboard for internal profiles only.
+ * Bundle ids are declared per build profile in eas.json. Purchase enable flags
+ * are deliberately excluded so local testing cannot enable production billing.
+ * Enable them deliberately in the intended environment after backend setup.
  */
 const SKIPPED_KEYS = new Set([
   "EXPO_PUBLIC_IOS_BUNDLE_ID",
   "EXPO_PUBLIC_ANDROID_PACKAGE",
   "EXPO_PUBLIC_ENABLE_QA_PURCHASE",
+  "EXPO_PUBLIC_ENABLE_STORE_PURCHASES",
 ]);
 
 function parseEnvFile(filePath) {
