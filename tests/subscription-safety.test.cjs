@@ -146,3 +146,24 @@ test("missing parent and unpaid/unknown plans never unlock premium", async () =>
     assert.equal((await readEntitlement(data)).isActive, false);
   }
 });
+
+test("subscription management reads the original store and cancellation without ending paid access", async () => {
+  const entitlement = await readEntitlement({
+    subscription: "monthly",
+    subscriptionRenewsAt: future,
+    subscriptionPlatform: "android",
+    subscriptionCancelledAt: past,
+  });
+  assert.equal(entitlement.platform, "android");
+  assert.equal(entitlement.cancelledAt.toISOString(), past);
+  assert.equal(entitlement.isActive, true);
+});
+
+test("legacy records tolerate missing or invalid management metadata", async () => {
+  for (const fields of [{}, { subscriptionPlatform: "unknown", subscriptionCancelledAt: "invalid" }]) {
+    const entitlement = await readEntitlement({ subscription: "monthly", subscriptionRenewsAt: future, ...fields });
+    assert.equal(entitlement.platform, null);
+    assert.equal(entitlement.cancelledAt, null);
+    assert.equal(entitlement.isActive, true);
+  }
+});

@@ -1,32 +1,6 @@
 /**
- * Parent settings screen.
- *
- * Displays one of two subscription sections:
- *
- * - trial / unsubscribed:
- *   shows the existing Membership Plan + Subscribe Now design
- *
- * - monthly / yearly:
- *   shows the Figma Manage Subscription design
- *
- * The subscription type is read from:
- * parents/{parentUid}.subscription
- *
- * Supported values:
- * - "trial"
- * - "monthly"
- * - "yearly"
- *
- * Optional Firestore fields supported by this screen:
- * - foundingMember: boolean
- * - subscriptionPriceLabel: string
- * - subscriptionRenewsAt: Firestore Timestamp | Date | ISO string
- * - nextBillingDate: Firestore Timestamp | Date | ISO string
- * - subscriptionTrialEndsAt: Firestore Timestamp | Date | ISO string
- * - trialEndsAt: Firestore Timestamp | Date | ISO string
- *
- * Settings render immediately. Firestore data refreshes in the
- * background, and the last loaded values are cached for smooth revisits.
+ * Parent settings. Subscription details share the entitlement reader used by
+ * premium activities; billing changes happen in the original purchase store.
  */
 
 import {
@@ -36,12 +10,14 @@ import {
 } from "expo-router";
 import {
   useCallback,
-  useMemo,
   useState,
 } from "react";
 import {
   ActivityIndicator,
   Alert,
+  AppState,
+  Linking,
+  Platform,
   Modal,
   Pressable,
   ScrollView,
@@ -50,16 +26,11 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import {
-  doc,
-  getDoc,
-} from "firebase/firestore";
 
 import ParentBottomNav from "@/components/dashboard/ParentBottomNav";
 import TermsModal from "@/components/modals/TermsModal";
 import AppButton from "@/components/ui/AppButton";
 import Logo from "@/components/ui/Logo";
-import { db } from "@/config/firebase";
 import {
   type ConsentDocumentKind,
 } from "@/constants/consent";
@@ -72,6 +43,8 @@ import {
   updateParentPreferences,
 } from "@/services/preferences";
 import { enableParentPushNotifications } from "@/services/pushRegistration";
+import { getSubscriptionEntitlement, type SubscriptionEntitlement } from "@/services/subscription";
+import { getSubscriptionPresentation } from "@/utils/subscriptionPresentation";
 import { x, y } from "@/utils/scaling";
 
 import AudioOffIcon from "../../assets/icons/audio-off.svg";
@@ -108,18 +81,7 @@ const SUBSCRIBED_LAYOUT = {
   deleteAccountTop: 1347,
 } as const;
 
-type ParentSubscription =
-  | "trial"
-  | "monthly"
-  | "yearly";
-
-type SubscriptionDetails = {
-  plan: ParentSubscription;
-  foundingMember: boolean;
-  priceLabel: string | null;
-  renewsAt: Date | null;
-  trialEndsAt: Date | null;
-};
+type SubscriptionDetails = SubscriptionEntitlement;
 
 type SettingsCacheEntry = {
   audioEnabled: boolean;
@@ -147,86 +109,10 @@ type SettingsRowProps = {
   disabled?: boolean;
 };
 
-function parseDateValue(
-  value: unknown,
-): Date | null {
-  if (value instanceof Date) {
-    return Number.isNaN(
-      value.getTime(),
-    )
-      ? null
-      : value;
-  }
-
-  if (
-    typeof value === "object" &&
-    value !== null &&
-    "toDate" in value &&
-    typeof value.toDate === "function"
-  ) {
-    const date = value.toDate();
-
-    return date instanceof Date &&
-      !Number.isNaN(date.getTime())
-      ? date
-      : null;
-  }
-
-  if (
-    typeof value === "string" ||
-    typeof value === "number"
-  ) {
-    const date = new Date(value);
-
-    return Number.isNaN(
-      date.getTime(),
-    )
-      ? null
-      : date;
-  }
-
-  return null;
-}
-
-function formatBillingDate(
-  value: Date | null,
-): string {
-  if (!value) {
-    return "View in App Store";
-  }
-
-  return new Intl.DateTimeFormat(
-    "en-US",
-    {
-      month: "long",
-      day: "numeric",
-      year: "numeric",
-    },
-  ).format(value);
-}
-
-function getTrialDaysLeft(
-  trialEndsAt: Date | null,
-): number | null {
-  if (!trialEndsAt) {
-    return null;
-  }
-
-  const millisecondsPerDay =
-    24 * 60 * 60 * 1000;
-
-  const difference =
-    trialEndsAt.getTime() -
-    Date.now();
-
-  if (difference <= 0) {
-    return 0;
-  }
-
-  return Math.ceil(
-    difference /
-      millisecondsPerDay,
-  );
+function formatBillingDate(value: Date | null): string {
+  return value
+    ? new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric" }).format(value)
+    : "Not available";
 }
 
 function SettingsToggle({
@@ -399,6 +285,9 @@ export default function SettingsScreen() {
           priceLabel: null,
           renewsAt: null,
           trialEndsAt: null,
+          isActive: false,
+          platform: null,
+          cancelledAt: null,
         },
     );
 
@@ -423,77 +312,29 @@ export default function SettingsScreen() {
   useFocusEffect(
     useCallback(() => {
       let isMounted = true;
+      let requestVersion = 0;
 
       async function loadSettings() {
+        const version = ++requestVersion;
         if (!user?.uid) {
           return;
         }
 
         try {
           const [
-            snapshot,
+            nextSubscriptionDetails,
             preferences,
           ] = await Promise.all([
-            getDoc(
-              doc(
-                db,
-                "parents",
-                user.uid,
-              ),
-            ),
+            getSubscriptionEntitlement(user.uid),
 
             getParentPreferences(
               user.uid,
             ),
           ]);
 
-          if (!isMounted) {
+          if (!isMounted || version !== requestVersion) {
             return;
           }
-
-          const data =
-            snapshot.exists()
-              ? snapshot.data()
-              : {};
-
-          const plan: ParentSubscription =
-            data.subscription ===
-              "monthly" ||
-            data.subscription ===
-              "yearly"
-              ? data.subscription
-              : "trial";
-
-          const renewsAt =
-            parseDateValue(
-              data.subscriptionRenewsAt ??
-                data.nextBillingDate,
-            );
-
-          const trialEndsAt =
-            parseDateValue(
-              data.subscriptionTrialEndsAt ??
-                data.trialEndsAt,
-            );
-
-          const nextSubscriptionDetails: SubscriptionDetails =
-            {
-              plan,
-
-              foundingMember:
-                data.foundingMember ===
-                true,
-
-              priceLabel:
-                typeof data.subscriptionPriceLabel ===
-                "string"
-                  ? data.subscriptionPriceLabel.trim()
-                  : null,
-
-              renewsAt,
-
-              trialEndsAt,
-            };
 
           /*
            * Update the visible screen only after both reads finish.
@@ -540,11 +381,15 @@ export default function SettingsScreen() {
       }
 
       void loadSettings();
+      const listener = AppState.addEventListener("change", state => {
+        if (state === "active") void loadSettings();
+      });
 
       return () => {
         isMounted = false;
+        listener.remove();
       };
-    }, [user?.uid]),
+    }, [user]),
   );
 
   async function persistPreference(
@@ -606,108 +451,26 @@ export default function SettingsScreen() {
       2 -
     y(258);
 
-  const isSubscribed =
-    subscriptionDetails.plan ===
-      "monthly" ||
-    subscriptionDetails.plan ===
-      "yearly";
-
-  const activeLayout =
-    isSubscribed
-      ? SUBSCRIBED_LAYOUT
-      : TRIAL_LAYOUT;
-
-  const planTitle =
-    useMemo(() => {
-      const frequency =
-        subscriptionDetails.plan ===
-        "yearly"
-          ? "Yearly Plan"
-          : "Monthly Plan";
-
-      if (
-        subscriptionDetails.foundingMember
-      ) {
-        return `Founding Member\n${frequency}`;
-      }
-
-      return `Calm Courage\n${frequency}`;
-    }, [
-      subscriptionDetails.foundingMember,
-      subscriptionDetails.plan,
-    ]);
-
-  const subscriptionPrice =
-    useMemo(() => {
-      const customPrice =
-        subscriptionDetails.priceLabel;
-
-      if (customPrice) {
-        return subscriptionDetails.foundingMember
-          ? `${customPrice}\npermanently locked`
-          : customPrice;
-      }
-
-      if (
-        subscriptionDetails.plan ===
-        "monthly"
-      ) {
-        return subscriptionDetails.foundingMember
-          ? "$ 7.99 / month\npermanently locked"
-          : "$ 7.99 / month";
-      }
-
-      return "Yearly subscription\nmanaged in App Store";
-    }, [
-      subscriptionDetails.foundingMember,
-      subscriptionDetails.plan,
-      subscriptionDetails.priceLabel,
-    ]);
-
-  const nextBillingDate =
-    useMemo(
-      () =>
-        formatBillingDate(
-          subscriptionDetails.renewsAt,
-        ),
-      [
-        subscriptionDetails.renewsAt,
-      ],
-    );
-
-  const trialDaysLeft =
-    useMemo(
-      () =>
-        getTrialDaysLeft(
-          subscriptionDetails.trialEndsAt,
-        ),
-      [
-        subscriptionDetails.trialEndsAt,
-      ],
-    );
-
-  const subscriptionStatus =
-    useMemo(() => {
-      if (
-        trialDaysLeft !== null &&
-        trialDaysLeft > 0
-      ) {
-        return `Active - Free Trial\n(${trialDaysLeft} ${
-          trialDaysLeft === 1
-            ? "day"
-            : "days"
-        } left)`;
-      }
-
-      return "Active Subscription";
-    }, [trialDaysLeft]);
+  const subscription = getSubscriptionPresentation(subscriptionDetails, Platform.OS);
+  // Keep expired subscription details and the store management entry accessible.
+  const isSubscribed = subscription.hasPlan;
+  const activeLayout = isSubscribed ? SUBSCRIBED_LAYOUT : TRIAL_LAYOUT;
+  const nextBillingDate = formatBillingDate(subscription.date);
 
   function handleSubscribe() {
     router.push("/paywall" as Href);
   }
 
-  function handleManageSubscription() {
-    router.push("/paywall" as Href);
+  async function handleManageSubscription() {
+    if (!subscription.store.url) {
+      Alert.alert("Manage subscription", "Open the App Store or Google Play account used for your purchase to manage or cancel renewal.");
+      return;
+    }
+    try {
+      await Linking.openURL(subscription.store.url);
+    } catch {
+      Alert.alert("Unable to open store", "Please open your store account's subscription settings to manage or cancel renewal.");
+    }
   }
 
   function handleHelpSupport() {
@@ -964,7 +727,7 @@ export default function SettingsScreen() {
                     styles.subscribedPlanTitle
                   }
                 >
-                  {planTitle}
+                  {subscription.title}
                 </Text>
 
                 <Text
@@ -972,7 +735,7 @@ export default function SettingsScreen() {
                     styles.subscribedPrice
                   }
                 >
-                  {subscriptionPrice}
+                  {subscription.priceDescription}
                 </Text>
 
                 <View
@@ -986,7 +749,7 @@ export default function SettingsScreen() {
                     styles.nextBillingLabel
                   }
                 >
-                  Next billing date
+                  {subscription.dateLabel}
                 </Text>
 
                 <Text
@@ -1013,7 +776,7 @@ export default function SettingsScreen() {
                     adjustsFontSizeToFit
                     minimumFontScale={0.72}
                   >
-                    {subscriptionStatus}
+                    {subscription.status}
                   </Text>
                 </View>
               </View>
@@ -1025,17 +788,17 @@ export default function SettingsScreen() {
                     styles.controlPressed,
                 ]}
                 onPress={
-                  handleManageSubscription
+                  () => { void handleManageSubscription(); }
                 }
                 accessibilityRole="button"
-                accessibilityLabel="Manage subscription in App Store"
+                accessibilityLabel={subscription.managementLabel}
               >
                 <Text
                   style={
                     styles.manageStoreButtonText
                   }
                 >
-                  Manage in App Store
+                  {subscription.managementLabel}
                 </Text>
 
                 <ExternalArrow />
@@ -1071,9 +834,9 @@ export default function SettingsScreen() {
                     styles.membershipPrice
                   }
                 >
-                  Monthly Subscription Pricing:
+                  View available plans and
                   {"\n"}
-                  $7.99/mo
+                  prices before subscribing
                 </Text>
 
                 <View
@@ -1082,7 +845,7 @@ export default function SettingsScreen() {
                   }
                 >
                   <AppButton
-                    title="Subscribe Now"
+                    title="View Plans"
                     onPress={
                       handleSubscribe
                     }

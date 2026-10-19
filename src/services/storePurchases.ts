@@ -87,7 +87,10 @@ export async function loadStorePlans(uid: string): Promise<StorePlan[]> {
 
 export async function purchaseStorePlan(uid: string, plan: StorePlan) {
   return withStore(uid, async sdk => {
-    const { productIds } = await sync(uid);
+    const { productIds, entitlement } = await sync(uid);
+    // Another device or a delayed renewal may have activated access meanwhile.
+    // Plan changes belong in store management, not a second checkout here.
+    if (entitlement.isActive) return entitlement;
     if (!productIds.includes(plan.package.product.identifier)) {
       throw new Error("This subscription is not available. Please reload the offers.");
     }

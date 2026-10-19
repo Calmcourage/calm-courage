@@ -2,7 +2,7 @@
   "name": "calm-courage-functions",
   "description": "Production Cloud Functions for Calm Courage",
   "engines": {
-    "node": "20"
+    "node": "22"
   },
   "main": "index.js",
   "private": true,

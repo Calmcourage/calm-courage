@@ -105,6 +105,13 @@ test("restore returns server-confirmed access", async () => {
   assert.equal(result.isActive, true);
   assert.deepEqual(ctx.events, ["configure", "server-sync", "restore", "server-sync"]);
 });
+
+test("access activated since opening the paywall prevents a second checkout", async () => {
+  const ctx = setup({ active: true });
+  const result = await ctx.service.purchaseStorePlan(uid, { package: storePackage });
+  assert.equal(result.isActive, true);
+  assert.deepEqual(ctx.events, ["configure", "server-sync"]);
+});
 test("account switching re-identifies SDK before operating", async () => {
   const ctx = setup({ sdkUid: "previous_parent" });
   await ctx.service.loadStorePlans(uid);

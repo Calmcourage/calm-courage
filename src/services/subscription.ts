@@ -25,6 +25,8 @@ export type SubscriptionEntitlement = {
   renewsAt: Date | null;
   trialEndsAt: Date | null;
   isActive: boolean;
+  platform: "ios" | "android" | null;
+  cancelledAt: Date | null;
 };
 
 const DEFAULT_ENTITLEMENT: SubscriptionEntitlement = {
@@ -34,6 +36,8 @@ const DEFAULT_ENTITLEMENT: SubscriptionEntitlement = {
   renewsAt: null,
   trialEndsAt: null,
   isActive: false,
+  platform: null,
+  cancelledAt: null,
 };
 
 function parentRef(parentUid: string) {
@@ -114,6 +118,11 @@ export async function getSubscriptionEntitlement(
     renewsAt,
     trialEndsAt,
     isActive: computeIsActive(plan, renewsAt),
+    platform:
+      data.subscriptionPlatform === "ios" || data.subscriptionPlatform === "android"
+        ? data.subscriptionPlatform
+        : null,
+    cancelledAt: parseDateValue(data.subscriptionCancelledAt),
   };
 }
 
