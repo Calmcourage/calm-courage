@@ -17,10 +17,18 @@
       "autoIncrement": true,
       "environment": "preview"
     },
+    "development-device": {
+      "extends": "development",
+      "ios": {
+        "simulator": false
+      }
+    },
     "production": {
       "autoIncrement": true,
       "environment": "production",
       "env": {
+        "EXPO_PUBLIC_ENABLE_QA_PURCHASE": "false",
+        "EXPO_PUBLIC_ENABLE_STORE_PURCHASES": "false",
         "EXPO_PUBLIC_IOS_BUNDLE_ID": "com.calmcourage.app",
         "EXPO_PUBLIC_ANDROID_PACKAGE": "com.calmcourage.app"
       }
