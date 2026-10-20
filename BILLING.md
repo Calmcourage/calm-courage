@@ -33,6 +33,8 @@ The webhook retrieves current state after receiving a notification instead of gr
 
 ## Required Accounts and Dashboard Configuration
 
+For the current step-by-step testing setup (starting with RevenueCat while Firebase access is pending), see [BILLING-TESTING.md](BILLING-TESTING.md).
+
 1. Appropriate access to Apple Developer / App Store Connect, Google Play Console, Firebase, and Expo/EAS.
 2. A RevenueCat project connected to both stores, with store verification credentials and server notifications configured.
 3. Real auto-renewing subscription products in the stores. Monthly billing is the current product direction; the code supports annual billing, but offering it remains a product decision.

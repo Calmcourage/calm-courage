@@ -36,6 +36,8 @@ firebase-debug.*.log
 .env
 .env*.local
 functions/.env
+functions/.env.*
+!functions/.env.example
 
 # local export size checks
 .expo-export-check/
