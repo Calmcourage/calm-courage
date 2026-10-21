@@ -3,7 +3,8 @@
 ## Approach and Current Status
 
 The local implementation follows the recommended approach: **RevenueCat + Apple/Google in-app purchases + Firebase entitlement storage**.
-No RevenueCat project has been created, store products configured, keys entered, native builds produced, or Firebase functions deployed during this work.
+As of 2026-10-22, a RevenueCat project exists, both server secrets are stored in Firebase Secret Manager, and `syncSubscription` / `revenueCatWebhook` are deployed to `calm-courage-co` on Node.js 22. Both endpoints are reachable and seven live authentication/disabled-state checks passed.
+Store credentials and products, native purchase builds, real RevenueCat queries, and purchase-to-Firestore integration testing remain pending. See [BILLING-TESTING.md](BILLING-TESTING.md) and the [2026-10-22 report and next steps](DAILY-REPORT-2026-10-22.md).
 Both client and backend billing are disabled by default. Installing the SDK does not activate a service account or enable subscription charges.
 
 RevenueCat unifies purchase verification, subscription status, and notifications across both stores, reducing the work of maintaining two separate integrations.
@@ -33,7 +34,7 @@ The webhook retrieves current state after receiving a notification instead of gr
 
 ## Required Accounts and Dashboard Configuration
 
-For the current step-by-step testing setup (starting with RevenueCat while Firebase access is pending), see [BILLING-TESTING.md](BILLING-TESTING.md).
+For current deployment status, configuration, and the remaining validation steps, see [BILLING-TESTING.md](BILLING-TESTING.md).
 
 1. Appropriate access to Apple Developer / App Store Connect, Google Play Console, Firebase, and Expo/EAS.
 2. A RevenueCat project connected to both stores, with store verification credentials and server notifications configured.
@@ -66,7 +67,7 @@ Expo Go does not load the native purchase SDK, preventing its Preview API Mode f
 `react-native-purchases` and the SDK 57 version of `expo-dev-client` are installed, and a `development-device` profile has been added.
 Link the EAS project and configure signing before building. No build was run during this phase.
 
-## Firebase Configuration (Deployment Deferred)
+## Firebase Configuration and Deployment
 
 Non-sensitive parameters are documented in `functions/.env.example`:
 
@@ -81,9 +82,9 @@ Configure the following through Firebase Secret Manager. Do not commit them to G
 - `REVENUECAT_SECRET_API_KEY`: a REST API v1 secret key.
 - `REVENUECAT_WEBHOOK_SECRET`: the random secret matching the webhook Authorization header.
 
-The local Functions configuration targets Node 22. Once access is available, confirm the target project before deploying the new functions and configuring the webhook. The deployed runtime does not change until deployment.
-The legacy entitlement vulnerability remains in the deployed backend: local changes do not deploy automatically.
-Deploying only `activateSubscription` closes the legacy grant vulnerability. Enabling in-app purchases also requires deploying `syncSubscription` and `revenueCatWebhook` and completing the dashboard configuration.
+The two new functions are deployed on Node 22 with `BILLING_ENABLED=false`, `REVENUECAT_ALLOW_SANDBOX=false`, and an empty product mapping. The user enabled Cloud Run Allow public access for these two services after the CLI's `allUsers` IAM grant was rejected; application authentication remains in place.
+The 2026-10-22 deployment did not update `activateSubscription`, `clearSubscription`, or Firestore rules. Review the deployed legacy activation endpoint before enabling purchases; the local implementation rejects unverified grants, and local changes do not deploy automatically.
+Enabling in-app purchases still requires store configuration and sandbox integration testing. Deployment alone does not verify the RevenueCat API key or activate billing.
 
 ## Validation and Remaining Release Work
 

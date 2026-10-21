@@ -1,7 +1,11 @@
 # 订阅测试配置与验证
 
-当前从第 2 步开始：已有 RevenueCat 项目，尚未配置商品和 API Key。
-Firebase 项目选择和权限确认暂缓，因此尚未部署或做在线端到端验证。
+已有 RevenueCat 项目，商店账号及商品尚待配置。
+2026-10-22 已确认部署目标为 `calm-courage-co`，Firebase CLI 登录和项目访问已验证。
+`REVENUECAT_WEBHOOK_SECRET` 和 `REVENUECAT_SECRET_API_KEY` 均已创建于该项目的 Secret Manager，版本 1 已启用；密钥值不记录在本文。
+本机 `functions/.env.calm-courage-co` 已准备，订阅与 sandbox 均关闭、商品映射为空。
+两个函数已创建，均为 `ACTIVE` / `nodejs22`。首次部署在设置公开调用 IAM 权限时失败，随后用户在 Cloud Run 为这两个服务开启了 Allow public access，平台层 HTTP 403 已解除。
+已确认两个服务就绪、`invokerIamDisabled=true`，并完成 7 项在线基础鉴权及关闭状态检查，全部通过。RevenueCat 实际查询、真实订阅写入和购买全流程尚未验证。
 本文件补充 [BILLING.md](BILLING.md)，不改变现有同步业务逻辑。
 
 ## 2. 配置 RevenueCat（现在进行）
@@ -38,18 +42,55 @@ REVENUECAT_PRODUCT_PLANS={"app_store:REPLACE_WITH_REAL_IOS_PRODUCT_ID":"monthly"
 
 本地文件被 Git 忽略。不要提交密钥，也不要将密钥发到聊天中。生成 token 只是本地准备，尚未在 RevenueCat Dashboard 配置。
 
-### Webhook 配置先准备，部署后保存 URL
+### Webhook 配置
 
 RevenueCat → Integrations → Webhooks：准备测试配置，选择 **Sandbox**、本次测试的 App 和所有相关订阅事件，Authorization 使用上述完整 Bearer 值。
-等第 3 步部署成功后，填写 CLI 输出的 `revenueCatWebhook` HTTPS URL；当前没有可用地址，不填虚构地址。
+当前 webhook URL 为 `https://us-central1-calm-courage-co.cloudfunctions.net/revenueCatWebhook`。
+订阅功能仍关闭，合法事件会返回 503 并触发 RevenueCat 重试；开始真实同步测试前再启用相应投递，避免将关闭状态误判为集成完成。
 当前代码验证 Authorization header；Dashboard 可选的 HMAC signing secret 是另一种机制，不能拿它替代本项目的 Bearer token。
 
 第 2 步完成条件：商店凭据已验证、实际商品已绑定 `premium`、Default offering 有对应 package、本地填入 API/SDK Key 和真实映射、恢复策略已配置。
 Webhook 地址与真实投递验证留到第 3、4 步。
 
-## 3. 部署测试后端（等待 Firebase 权限）
+## 3. 部署后端（接口已部署，订阅保持关闭）
 
-以下是权限恢复后的操作说明，本次尚未执行。先确认独立测试项目及其 Functions、Secret Manager、Firestore 部署权限，避免使用当前默认项目。
+当前授权的部署项目为 `calm-courage-co`。两个 Secret 和函数创建已完成，云端确认 `BILLING_ENABLED=false`、`REVENUECAT_ALLOW_SANDBOX=false`、商品映射为 `{}`；未部署 Firestore rules。
+
+### 当前部署结果与访问配置
+
+| 函数 | 区域 / 运行时 | URL | 当前外部访问 |
+| --- | --- | --- | --- |
+| `syncSubscription` | `us-central1` / Node.js 22 | `https://us-central1-calm-courage-co.cloudfunctions.net/syncSubscription` | 已到达应用层；未登录 / 无效 Firebase 令牌均为 HTTP 401。 |
+| `revenueCatWebhook` | `us-central1` / Node.js 22 | `https://us-central1-calm-courage-co.cloudfunctions.net/revenueCatWebhook` | 已到达应用层；方法、Bearer 和事件结构检查符合预期；订阅关闭时合法事件返回 HTTP 503。 |
+
+首次部署失败位置是为底层 Cloud Run 服务授予 `allUsers` 调用权限：
+
+```text
+Failed to set the IAM Policy on the Service .../services/syncsubscription
+Failed to set the IAM Policy on the Service .../services/revenuecatwebhook
+One or more users named in the policy do not belong to a permitted customer,
+perhaps due to an organization policy.
+```
+
+此错误与组织的 Domain Restricted Sharing 限制一致。有效 Invoker 组织策略的只读查询曾返回 HTTP 500。
+随后用户在 Cloud Run 控制台为两个服务设置 Allow public access；只读核对确认它们的 `invokerIamDisabled` 均为 `true`，服务就绪，外部请求已到达应用代码。
+
+Google 官方支持在组织允许时，仅为指定 Cloud Run 服务设置 **Allow public access**（关闭该服务的 Invoker IAM 检查），同时保留业务代码中的 Firebase / webhook Bearer 校验。
+本次未修改组织策略，业务代码中的鉴权仍保留。此设置只应用于上述两个服务。
+
+已由用户在控制台完成的设置，对应服务级命令如下，供后续维护参考：
+
+```powershell
+gcloud run services update syncsubscription --project calm-courage-co --region us-central1 --no-invoker-iam-check
+gcloud run services update revenuecatwebhook --project calm-courage-co --region us-central1 --no-invoker-iam-check
+```
+
+若组织强制启用 Invoker IAM 检查，则应由管理员确定批准的调用方式，不尝试绕过该限制。
+后续通过 Firebase CLI 更新代码时，若再次出现 `allUsers` IAM 设置错误，应核对服务实际就绪状态和 Allow public access 设置，再验证接口；不要仅凭部署日志推断外部可访问性。
+
+官方说明：[Cloud Run 公开访问与组织限制](https://docs.cloud.google.com/run/docs/authenticating/public)。
+
+以下保留完整部署流程供后续操作。
 
 ### 商店凭据尚未就绪时，先部署接口
 
@@ -120,7 +161,27 @@ REVENUECAT_ALLOW_SANDBOX=false
 4. 将实际 webhook URL 保存到 RevenueCat 测试 webhook 配置。测试客户端 Firebase 配置必须指向同一测试项目，Functions region 为 `us-central1`。
    开始真机测试时，仅在内部原生构建开启 `EXPO_PUBLIC_ENABLE_STORE_PURCHASES=true`。
 
-## 4. 验证（本地通过，在线待执行）
+## 4. 验证（本地与在线基础检查通过，购买全流程待执行）
+
+### 2026-10-22 在线基础检查
+
+已对上述实际云端 URL 执行 **7/7 项检查，全部通过**：
+
+| 请求 | 实际结果 |
+| --- | --- |
+| `syncSubscription`，无登录令牌 | HTTP 401，`UNAUTHENTICATED`。 |
+| `syncSubscription`，无效 Bearer 令牌 | HTTP 401，`UNAUTHENTICATED`。 |
+| webhook，GET | HTTP 405。 |
+| webhook，POST，无 Authorization | HTTP 401。 |
+| webhook，POST，错误 Bearer | HTTP 401。 |
+| webhook，正确 Bearer、缺少事件字段 | HTTP 400。 |
+| webhook，正确 Bearer、合法 TEST 事件结构 | HTTP 503，符合 `BILLING_ENABLED=false` 的关闭状态。 |
+
+另外只读核对了云端两个服务的就绪状态、订阅与 sandbox 关闭配置，以及 Secret 版本 1 绑定。
+测试没有启用订阅或修改 Firestore 数据，没有从 RevenueCat Dashboard 发起真实投递。
+尚未在线验证邮箱未验证 / 已验证用户的分支、实际 RevenueCat API 查询、Firestore rules、真实购买及续订/退款全流程；后续仍按下面清单验证。
+
+### 本地回归与后续全流程验证
 
 本地回归命令不需要 Firebase 权限：
 
