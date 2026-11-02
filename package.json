@@ -58,7 +58,11 @@
     "seed:emotion-prompts": "node ./scripts/seed-emotion-prompts.mjs",
     "eas:env:sync": "node ./scripts/sync-eas-env.mjs",
     "firebase:deploy": "npx firebase-tools deploy --only firestore:rules,firestore:indexes,storage,functions",
-    "functions:install": "npm install --prefix functions"
+    "functions:install": "npm install --prefix functions",
+    "billing:online": "node scripts/verify-billing-online.cjs preflight",
+    "billing:online:prepare": "node scripts/verify-billing-online.cjs prepare",
+    "billing:online:verify": "node scripts/verify-billing-online.cjs run",
+    "billing:online:cleanup": "node scripts/verify-billing-online.cjs cleanup"
   },
   "private": true
 }

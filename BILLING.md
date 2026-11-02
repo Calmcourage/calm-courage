@@ -4,7 +4,8 @@
 
 The local implementation follows the recommended approach: **RevenueCat + Apple/Google in-app purchases + Firebase entitlement storage**.
 As of 2026-10-22, a RevenueCat project exists, both server secrets are stored in Firebase Secret Manager, and `syncSubscription` / `revenueCatWebhook` are deployed to `calm-courage-co` on Node.js 22. Both endpoints are reachable and seven live authentication/disabled-state checks passed.
-Store credentials and products, native purchase builds, real RevenueCat queries, and purchase-to-Firestore integration testing remain pending. See [BILLING-TESTING.md](BILLING-TESTING.md) and the [2026-10-22 report and next steps](DAILY-REPORT-2026-10-22.md).
+On 2026-11-02, the disabled-billing live script passed all 45 checks, including authenticated email-status branches, a real RevenueCat v1 query, matching deployed Firestore rules and client permission checks. Dedicated Firebase test accounts/data were cleaned up. Store credentials and products, native purchase builds, and purchase-to-Firestore integration testing remain pending. See [BILLING-TESTING.md](BILLING-TESTING.md) and the [2026-11-02 report and next steps](DAILY-REPORT-2026-11-02.md).
+The new isolated Firebase project `calm-courage-test` also passed its own 45 live checks after the user explicitly authorized public entry for its two billing services. Application authentication remains enforced; billing and sandbox remain disabled. Test Firebase accounts/data were cleaned up. The existing RevenueCat project is reused, so store and RevenueCat test isolation still require confirmation.
 Both client and backend billing are disabled by default. Installing the SDK does not activate a service account or enable subscription charges.
 
 RevenueCat unifies purchase verification, subscription status, and notifications across both stores, reducing the work of maintaining two separate integrations.
@@ -87,6 +88,8 @@ The 2026-10-22 deployment did not update `activateSubscription`, `clearSubscript
 Enabling in-app purchases still requires store configuration and sandbox integration testing. Deployment alone does not verify the RevenueCat API key or activate billing.
 
 ## Validation and Remaining Release Work
+
+The disabled-billing live verification script provides preflight, dedicated-account preparation, client checks, and cleanup commands. All 45 live checks passed on 2026-11-02 after the user refreshed the Firebase CLI login, and all dedicated Firebase test fixtures/accounts were cleaned up. Billing and sandbox remain disabled. See [BILLING-ONLINE.md](BILLING-ONLINE.md) for the results and scope; actual purchases, entitlement synchronization and Dashboard webhook delivery remain unverified.
 
 Run locally:
 

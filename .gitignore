@@ -35,6 +35,7 @@ firebase-debug.*.log
 # local env files
 .env
 .env*.local
+.billing-verification/
 functions/.env
 functions/.env.*
 !functions/.env.example

@@ -1,5 +1,6 @@
 {
   "projects": {
-    "default": "calm-courage-co"
+    "default": "calm-courage-co",
+    "billing-test": "calm-courage-test"
   }
 }

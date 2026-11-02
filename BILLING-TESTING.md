@@ -1,12 +1,66 @@
 # 订阅测试配置与验证
 
+2026-11-02 接续：已实现并完整运行本地在线验证脚本及账号准备/清理命令，**45/45 项在线检查通过**。真实账号邮箱状态分支、RevenueCat v1 查询和 Firestore 客户端权限已验证，测试账号与 Firebase 测试资料已清理；云端订阅和 sandbox 继续关闭。参见 [BILLING-ONLINE.md](BILLING-ONLINE.md) 和 [本次日报](DAILY-REPORT-2026-11-02.md)。以下 2026-10-22 在线结果为历史结果。
+
 已有 RevenueCat 项目，商店账号及商品尚待配置。
 2026-10-22 已确认部署目标为 `calm-courage-co`，Firebase CLI 登录和项目访问已验证。
 `REVENUECAT_WEBHOOK_SECRET` 和 `REVENUECAT_SECRET_API_KEY` 均已创建于该项目的 Secret Manager，版本 1 已启用；密钥值不记录在本文。
 本机 `functions/.env.calm-courage-co` 已准备，订阅与 sandbox 均关闭、商品映射为空。
 两个函数已创建，均为 `ACTIVE` / `nodejs22`。首次部署在设置公开调用 IAM 权限时失败，随后用户在 Cloud Run 为这两个服务开启了 Allow public access，平台层 HTTP 403 已解除。
-已确认两个服务就绪、`invokerIamDisabled=true`，并完成 7 项在线基础鉴权及关闭状态检查，全部通过。RevenueCat 实际查询、真实订阅写入和购买全流程尚未验证。
+2026-10-22 已确认两个服务就绪、`invokerIamDisabled=true`，并完成 7 项在线基础鉴权及关闭状态检查，全部通过。2026-11-02 已补充 RevenueCat 实际查询及客户端权限检查；真实订阅写入和购买全流程仍未验证。
 本文件补充 [BILLING.md](BILLING.md)，不改变现有同步业务逻辑。
+
+## 1. 独立环境和原生构建准备（2026-11-02）
+
+### 已核实及尚缺的信息
+
+| 项目 | 现状 / 下一步 |
+| --- | --- |
+| 独立测试 Firebase 项目 | `calm-courage-test` 已确认 ACTIVE、Email/Password 已启用；Standard / Native 模式的 `(default)` 数据库已创建于 `us-central1`，仓库 rules 及空索引配置已部署并核对一致；Web App 已注册，独立本地 Firebase 配置已保存。 |
+| 测试平台 | 用户已确认 iOS、Android 两个平台；先逐步准备 Firebase 测试项目。 |
+| 商店 App 标识 | 当前 iOS / Android 均为 `com.calmcourage.app`；待核对商店 App，不自行更名。 |
+| Expo/EAS 关联 | `app.json` 尚无 `extra.eas.projectId`；等待确认 EAS 所属账号/组织及目标项目。 |
+| 原生构建 | 已有 `development-device` 真机开发 profile；签名、设备和测试商店权限尚未确认，本次未发起构建。 |
+| 商店和 RevenueCat 权限 | 尚未获得可操作范围确认；现有工具没有连接这些控制台。 |
+
+向负责人转发 [权限确认稿](BILLING-ACCESS-REQUEST.md)，回填平台、独立 Firebase 项目、商店 App、RevenueCat App 和 EAS 项目信息。隔离项目未确认前，继续保持当前云端与客户端购买关闭。
+
+本地已新增 `billing-test` 别名和被 Git 忽略的 `functions/.env.calm-courage-test`，订阅、sandbox 都为 false，商品映射为空。默认项目仍为 `calm-courage-co`，根目录 `.env` 尚未切换；后续针对测试项目的命令必须明确指定 `--project calm-courage-test`。用户已启用 Email/Password 并创建数据库；已执行 `deploy --only firestore:rules,firestore:indexes --project calm-courage-test --non-interactive`，规则编译及部署成功，随后独立读取已发布 rules 与仓库核对一致，复合索引为 0。
+
+Web App 已注册，真实配置已保存到被 Git 忽略的 `.env.billing-test.local`，6 个 Firebase 字段齐全，客户端购买开关均 false，公开 RevenueCat SDK Key 留空。根目录 `.env` 保留原项目；验证脚本通过 `BILLING_VERIFY_ENV_FILE=.env.billing-test.local` 显式选择测试配置，要求使用 `functions/.secret.calm-courage-test.local`。具体运行方式见 [BILLING-ONLINE.md](BILLING-ONLINE.md)。
+
+用户了解费用后已启用 Blaze，已只读核实 `billingEnabled=true`。两个测试函数已部署为 ACTIVE / Node.js 22 / `us-central1`，订阅和 sandbox 均 false、映射为空、Secret 版本均为 1、无常驻实例配置；镜像已设 1 天自动清理。构建缺失的 `roles/cloudbuild.builds.builder` 仅在该测试项目补齐，未修改组织策略。
+
+用户明确授权后，仅将测试项目的 `syncsubscription`、`revenuecatwebhook` 配置为公开入口：`invokerIamDisabled=true`，未添加 `allUsers` 绑定或修改组织策略；Firebase 鉴权、webhook Bearer 校验保留。独立测试项目于北京时间 15:37:48–15:38:04 完成在线验证 **45/45 通过**，15:38:22 清理两个专用 Auth 账号、4 个文档及本地账号密码，无临时 ADC 文件遗留。RevenueCat 保留一个无订阅测试 customer。测试报告已单独归档至 `.billing-verification/calm-courage-test/`；两项目订阅和 sandbox 均继续关闭。下一步逐项确认商店账号权限。
+
+用户先了解费用、随后自行启用 Blaze；本次没有替用户绑定结算账户。费用说明基于 2026-11-02 官方价格：
+
+- 本项目使用第二代函数，执行资源按 Cloud Run 计费；`us-central1` 请求计费模式有每月 200 万请求、18 万 vCPU 秒及 36 万 GiB 秒免费额度，按结算账号跨项目汇总，超出部分另计。[Cloud Run 价格](https://cloud.google.com/run/pricing)
+- Standard Firestore 有每日 5 万读取、2 万写入和 1 GiB 存储等免费额度；本次少量测试远低于这些读写量。[Firebase 价格](https://firebase.google.com/pricing)
+- 部署的 Cloud Build 构建与 Artifact Registry 镜像存储需单独核算；镜像存储免费额度 0.5 GiB 按结算账号共享，重复部署保留镜像会增加用量。[Cloud Build](https://cloud.google.com/build/pricing)、[Artifact Registry](https://cloud.google.com/artifact-registry/pricing)
+- Secret Manager 每结算账号有 6 个活跃版本、每月 1 万次访问免费额度；测试项目与原项目可能共享额度。[Secret Manager](https://cloud.google.com/secret-manager/pricing)
+- 可先以 US$5/月作为轻量测试的预算目标示例，不是实际报价、账单承诺或费用封顶。实际还取决于构建次数、执行时长、镜像、网络、日志及其他项目已占用的免费额度。此预算不包含 Apple/Google、RevenueCat 或 Expo/EAS 的独立收费。
+- 预算提醒不暂停服务；Cloud Functions 另有 Preview 服务级 spend cap，但报告和执行有延迟，可产生超额费用，也不能覆盖整个项目的所有服务。[Spend cap 说明](https://firebase.google.com/docs/projects/billing/spend-caps)
+
+### Apple 路径
+
+1. 核对 App Store Connect App 的 Bundle ID；由具备相应权限的负责人准备自动续订商品和 sandbox 测试账号。
+2. 内购密钥由 **Account Holder 或 Admin** 在 Users and Access → Integrations → In-App Purchase 创建；将 `.p8`、Key ID、Issuer ID 安全配置到对应 RevenueCat App。[Apple 内购密钥说明](https://developer.apple.com/help/app-store-connect/configure-in-app-purchase-settings/generate-keys-for-in-app-purchases)
+3. 内购验证用的 In-App Purchase Key 与导入商品所用的 App Store Connect API Key 是不同配置。当前 React Native Purchases 版本需要正确的内购密钥；以 RevenueCat 的凭据验证通过为完成标准。[RevenueCat Apple 凭据类型](https://www.revenuecat.com/docs/store-configuration/app-store/service-credentials-index)、[内购密钥配置](https://www.revenuecat.com/docs/service-credentials/itunesconnect-app-specific-shared-secret/in-app-purchase-key-configuration)
+
+### Google 路径
+
+1. 核对 Play Console App 的 package，确认有测试轨道、商品/base plan 和测试人员管理权限；相关 Cloud 项目的负责人准备所需 API、服务账号及 Play 授权，并将 JSON 上传至对应 RevenueCat App。服务账号在 Cloud 中存在不代表已经获准访问 Play App。[RevenueCat Google Play 凭据配置](https://www.revenuecat.com/docs/service-credentials/creating-play-service-credentials)
+2. 将测试设备上的 Google 账号加入 **license testers**；使用测试轨道时还要完成该轨道的测试加入流程。测试轨道成员资格本身不保证免费购买，Google 明确要求 license tester 才能使用不扣款的测试支付方式。[Google Play Billing 测试说明](https://developer.android.com/google/play/billing/test)
+3. 原生构建的 package 必须匹配 Play App。验收记录中分别保存测试轨道资格、license tester 状态及测试付款提示，不将一个替代另一个。
+
+### 原生构建的执行顺序
+
+1. 负责人确认 EAS 项目后再关联已有项目，核对生成的 `extra.eas.projectId`。当前未关联状态会阻止 EAS 构建，不在本阶段自动创建或绑定未知组织项目。[Expo 项目关联说明](https://docs.expo.dev/accounts/programmatic-access/)
+2. 先配置明确指向独立测试 Firebase 项目的构建环境，并保持两个客户端购买开关 false；此时的真机包仅检查登录、页面和原生依赖，不能验收购买。
+3. 现有 `scripts/sync-eas-env.mjs` **不传参数会同步 development、preview、production 三个环境**。准备测试配置时必须明确指定目标环境，并先核对本机 `.env` 的项目；本次没有运行同步。公开 SDK Key 也要与所选 RevenueCat App 一致。
+4. 签名与设备就绪后，现有 `development-device` 可用于真机开发构建；默认 `development` 的 iOS 配置是 simulator。需要 Play 测试轨道或 TestFlight 时，再按所选分发渠道准备对应 store 构建 profile。不要将 Expo 内部分发、Play 测试轨道与 TestFlight 混为同一种分发渠道。[Expo 构建 profile](https://docs.expo.dev/build/eas-json/)、[内部分发](https://docs.expo.dev/build/internal-distribution/)
+5. 独立环境、商店凭据和商品全部核对后，再在该测试环境另行启用 sandbox、订阅与内部构建购买开关，按下文执行购买和 webhook 验收。当前 `calm-courage-co` 继续关闭。
 
 ## 2. 配置 RevenueCat（现在进行）
 
@@ -163,6 +217,12 @@ REVENUECAT_ALLOW_SANDBOX=false
 
 ## 4. 验证（本地与在线基础检查通过，购买全流程待执行）
 
+### 2026-11-02 保持订阅关闭的在线验证
+
+已在 `calm-courage-co` 完整运行脚本，verify 45/45 通过：云端关闭状态及已部署规则 3 项、真实账号 callable 3 项、RevenueCat 查询 1 项、webhook 5 项、两个账号各 16 项 Firestore 客户端权限，以及资料基线不变检查 1 项。专用账号和 Firebase 测试文档均已清理，RevenueCat 留有一个无订阅测试 customer。
+
+本地回归现为 96/96 通过（含新增在线脚本的 11 项安全测试）。这些本地测试使用模拟边界，在线结果另由真实脚本取得。账号的邮箱已验证标记由 Admin 设置，未测试真实邮箱验证链接；仍未启用订阅或验证真实购买/权益同步及 Dashboard 投递。
+
 ### 2026-10-22 在线基础检查
 
 已对上述实际云端 URL 执行 **7/7 项检查，全部通过**：
@@ -179,7 +239,7 @@ REVENUECAT_ALLOW_SANDBOX=false
 
 另外只读核对了云端两个服务的就绪状态、订阅与 sandbox 关闭配置，以及 Secret 版本 1 绑定。
 测试没有启用订阅或修改 Firestore 数据，没有从 RevenueCat Dashboard 发起真实投递。
-尚未在线验证邮箱未验证 / 已验证用户的分支、实际 RevenueCat API 查询、Firestore rules、真实购买及续订/退款全流程；后续仍按下面清单验证。
+截至 2026-10-22，邮箱未验证 / 已验证用户的分支、实际 RevenueCat API 查询、Firestore rules 和购买全流程均未验证；其中前三项已于 2026-11-02 补充通过，真实购买及续订/退款全流程仍待执行。
 
 ### 本地回归与后续全流程验证
 
